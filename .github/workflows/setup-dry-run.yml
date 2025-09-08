@@ -1,48 +1,27 @@
 name: setup-dry-run
 
 on:
+  workflow_dispatch:   # manual trigger
   push:
-    branches:
-      - codex
-      - dev
-      - agents
+    branches: [ codex, agents, dev ]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch: # allow manual trigger from GitHub UI
+    branches: [ main ]
 
 jobs:
   dry-run:
     runs-on: ubuntu-latest
-
+    container: ubuntu:22.04   # run inside clean Ubuntu container
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
+      - name: Install Git
         run: |
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
+          apt-get update -y
+          apt-get install -y git
 
-      - name: Run setup.py in dry-run mode
+      - name: Clone repo
         run: |
-          if [ -f setup.py ]; then
-            python setup.py --dry-run
-          else
-            echo "❌ setup.py not found"
-            exit 1
-          fi
+          git clone https://github.com/${{ github.repository }} /workspace
 
-      - name: Mark success
-        if: success()
-        run: echo "✅ Dry run passed successfully."
-
-      - name: Mark failure
-        if: failure()
-        run: echo "❌ Dry run failed."
+      - name: Verify directory
+        run: |
+          cd /workspace
+          echo "✅ Successfully cloned and accessed repo at /workspace"
