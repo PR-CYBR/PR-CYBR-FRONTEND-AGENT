@@ -1,0 +1,152 @@
+name: Codex Sync Pipeline
+
+on:
+  push:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [codex_run]
+
+jobs:
+  codex-sync:
+    name: Codex Sync - ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: Python
+            language: python
+            python-version: '3.11'
+          - name: Node.js
+            language: node
+            node-version: '18'
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AGENT_ID: A01
+      ORG: PR-CYBR
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
+      N8N_API_URL: ${{ secrets.N8N_API_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Node.js
+        if: matrix.language == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ matrix.language }}" = 'python' ]; then
+            python -m pip install --upgrade pip
+            if [ -f requirements.txt ]; then
+              pip install -r requirements.txt
+            else
+              echo 'No requirements.txt found. Skipping Python dependency installation.'
+            fi
+          else
+            if [ -f package-lock.json ]; then
+              npm ci
+            elif [ -f package.json ]; then
+              npm install
+            else
+              echo 'No package.json found. Skipping Node dependency installation.'
+            fi
+          fi
+
+      - name: Lint
+        run: |
+          if [ "${{ matrix.language }}" = 'python' ]; then
+            if command -v flake8 >/dev/null 2>&1; then
+              flake8
+            else
+              echo 'flake8 not installed. Skipping Python linting.'
+            fi
+          else
+            if [ -f package.json ] && command -v jq >/dev/null 2>&1 && jq -e '.scripts.lint' package.json >/dev/null 2>&1; then
+              npm run lint
+            else
+              echo 'No Node lint script configured. Skipping Node linting.'
+            fi
+          fi
+
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.language }}" = 'python' ]; then
+            if python -m pytest --version >/dev/null 2>&1; then
+              python -m pytest
+            else
+              echo 'pytest not available. Skipping Python tests.'
+            fi
+          else
+            if [ -f package.json ] && command -v jq >/dev/null 2>&1 && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+              npm test -- --watch=false
+            else
+              echo 'No Node test script configured. Skipping Node tests.'
+            fi
+          fi
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.language }}" = 'python' ]; then
+            if [ -f setup.py ]; then
+              python setup.py sdist bdist_wheel
+            elif [ -f pyproject.toml ]; then
+              if python -m pip show build >/dev/null 2>&1; then
+                python -m build
+              else
+                python -m pip install build
+                python -m build
+              fi
+            else
+              echo 'No Python build configuration found. Skipping build.'
+            fi
+          else
+            if [ -f package.json ] && command -v jq >/dev/null 2>&1 && jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+              npm run build
+            else
+              echo 'No Node build script configured. Skipping build.'
+            fi
+          fi
+
+      - name: Archive artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.language }}-artifacts
+          path: |
+            dist
+            build
+          if-no-files-found: ignore
+
+      - name: Notify Slack
+        if: always() && env.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"Codex Sync workflow completed with status ${{ job.status }} for ${{ matrix.name }}"}' \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Notify Zapier
+        if: always() && env.ZAPIER_WEBHOOK_URL != ''
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+            --data '{"event":"codex_sync","status":"${{ job.status }}","target":"${{ matrix.name }}"}' \
+            "$ZAPIER_WEBHOOK_URL"
+
+      - name: Notify n8n
+        if: always() && env.N8N_API_URL != ''
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+            --data '{"workflow":"codex_sync","status":"${{ job.status }}","target":"${{ matrix.name }}"}' \
+            "$N8N_API_URL"
