@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "purpose": "Machine-readable trace of codex sync and security automation workflow changes produced during audits.",
+    "schema_version": "1.0.0",
+    "last_updated": "<YYYY-MM-DD>",
+    "audited_by": "<name / team>"
+  },
+  "workflows": [
+    {
+      "name": "codex-sync",
+      "description": "Synchronize codex repositories and propagate approved changes to dependent services.",
+      "version": "<release tag or commit>",
+      "changes": [
+        {
+          "type": "feature|bugfix|policy",
+          "summary": "Describe the codex sync change introduced in this audit cycle.",
+          "risk_level": "low|medium|high",
+          "linked_evidence": ["<URL or path>"]
+        }
+      ],
+      "validation": {
+        "status": "pass|fail|blocked",
+        "notes": "Document validation results or outstanding issues."
+      }
+    },
+    {
+      "name": "security-automation",
+      "description": "Execute automated detections, playbooks, and mitigations informed by codex outputs.",
+      "version": "<release tag or commit>",
+      "changes": [
+        {
+          "type": "detection|response|integration",
+          "summary": "Describe the security automation change introduced in this audit cycle.",
+          "risk_level": "low|medium|high",
+          "linked_evidence": ["<URL or path>"]
+        }
+      ],
+      "validation": {
+        "status": "pass|fail|blocked",
+        "notes": "Document validation results or outstanding issues."
+      }
+    }
+  ]
+}
