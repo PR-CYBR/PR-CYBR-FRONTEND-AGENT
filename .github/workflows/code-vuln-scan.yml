@@ -1,0 +1,157 @@
+name: Code Vulnerability Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      status:
+        description: Overall status of the static analysis scan
+        value: ${{ jobs.static_analysis.outputs.status }}
+      critical_findings:
+        description: Critical findings detected by the scanner
+        value: ${{ jobs.static_analysis.outputs.critical_findings }}
+      total_findings:
+        description: Total findings detected by the scanner
+        value: ${{ jobs.static_analysis.outputs.total_findings }}
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  static_analysis:
+    name: Run Semgrep static analysis
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.evaluate.outputs.status }}
+      critical_findings: ${{ steps.evaluate.outputs.critical }}
+      total_findings: ${{ steps.evaluate.outputs.total }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        id: semgrep
+        uses: returntocorp/semgrep-action@v1
+        continue-on-error: true
+        with:
+          config: p/default
+          json: true
+          output: semgrep-report.json
+
+      - name: Evaluate Semgrep results
+        id: evaluate
+        run: |
+          python <<'PY'
+          import json
+          import os
+
+          path = "semgrep-report.json"
+          total = 0
+          critical = 0
+
+          if os.path.exists(path) and os.path.getsize(path):
+              with open(path, "r", encoding="utf-8") as handle:
+                  try:
+                      data = json.load(handle)
+                  except json.JSONDecodeError:
+                      data = {}
+              results = data.get("results", []) if isinstance(data, dict) else []
+              total = len(results)
+              critical = sum(
+                  1
+                  for item in results
+                  if str(item.get("extra", {}).get("severity", "")).lower() in {"error", "critical"}
+              )
+          status = "success"
+          if critical > 0:
+              status = "failure"
+
+          github_output = os.environ["GITHUB_OUTPUT"]
+          with open(github_output, "a", encoding="utf-8") as handle:
+              handle.write(f"total={total}\n")
+              handle.write(f"critical={critical}\n")
+              handle.write(f"status={status}\n")
+          PY
+
+      - name: Write job summary
+        run: |
+          {
+            echo "### Code Vulnerability Scan"
+            echo ""
+            if [ "${{ steps.evaluate.outputs.status }}" = "success" ]; then
+              echo "✅ No critical code vulnerabilities detected."
+            else
+              echo "❌ Critical code vulnerabilities detected."
+            fi
+            echo ""
+            echo "- Total findings: ${{ steps.evaluate.outputs.total }}"
+            echo "- Critical findings: ${{ steps.evaluate.outputs.critical }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR with summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          STATUS: ${{ steps.evaluate.outputs.status }}
+          TOTAL: ${{ steps.evaluate.outputs.total }}
+          CRITICAL: ${{ steps.evaluate.outputs.critical }}
+        with:
+          script: |
+            const marker = '<!-- code-vuln-scan-report -->';
+            const status = process.env.STATUS;
+            const total = process.env.TOTAL;
+            const critical = process.env.CRITICAL;
+            const statusLine = status === 'success'
+              ? '✅ No critical code vulnerabilities detected.'
+              : '❌ Critical code vulnerabilities detected.';
+            const bodyLines = [
+              marker,
+              '### Code Vulnerability Scan Report',
+              statusLine,
+              `- Total findings: ${total}`,
+              `- Critical findings: ${critical}`,
+              '',
+              'Review the workflow run artifacts for the detailed Semgrep report.'
+            ];
+            const body = bodyLines.join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(comment => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail on execution errors
+        if: steps.semgrep.outcome == 'failure' && steps.evaluate.outputs.status == 'success'
+        run: |
+          echo "Semgrep execution failed."
+          exit 1
+
+      - name: Enforce failure on critical findings
+        if: steps.evaluate.outputs.status == 'failure'
+        run: |
+          echo "Critical code vulnerabilities were detected."
+          exit 1
