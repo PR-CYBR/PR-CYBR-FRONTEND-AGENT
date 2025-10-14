@@ -22,13 +22,31 @@ jobs:
           username: ${{ secrets.PR_CYBR_DOCKER_USER }}
           password: ${{ secrets.PR_CYBR_DOCKER_PASS }}
 
+      - name: Compute image tag
+        id: image_tag
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: build image
         run: |
-          set -e
-          TAG=$(echo ${{ github.sha }} | cut -c1-7)
-          docker build ./build/ -t prcybr/pr-cybr-frontend-agent:${TAG} -t prcybr/pr-cybr-frontend-agent:latest
-      
+          docker build ./build/ \
+            -t prcybr/pr-cybr-frontend-agent:${{ steps.image_tag.outputs.tag }} \
+            -t prcybr/pr-cybr-frontend-agent:latest
+
       - name: push image to docker hub
+        shell: bash
         run: |
-          docker push prcybr/pr-cybr-frontend-agent:${TAG}
-          docker push prcybr/pr-cybr-frontend-agent:latest
+          set -euo pipefail
+          IMAGE_NAME="prcybr/pr-cybr-frontend-agent"
+          TAG="${{ steps.image_tag.outputs.tag }}"
+
+          echo "Pushing ${IMAGE_NAME}:${TAG}"
+          if ! docker push "${IMAGE_NAME}:${TAG}"; then
+            echo "::error::Failed to push ${IMAGE_NAME}:${TAG}"
+            exit 1
+          fi
+
+          echo "Pushing ${IMAGE_NAME}:latest"
+          if ! docker push "${IMAGE_NAME}:latest"; then
+            echo "::error::Failed to push ${IMAGE_NAME}:latest"
+            exit 1
+          fi
