@@ -1,0 +1,107 @@
+name: Sync Documentation to Wiki
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror docs into wiki and rebuild navigation
+        run: |
+          set -euo pipefail
+
+          rsync -av --delete --exclude '.git/' docs/ wiki/
+
+          if [ -f wiki/README.md ]; then
+            if [ -f wiki/Home.md ]; then
+              rm wiki/Home.md
+            fi
+            mv wiki/README.md wiki/Home.md
+          fi
+
+          python - <<'PY'
+import pathlib
+
+for path in pathlib.Path('wiki').rglob('*.md'):
+    if '.git' in path.parts:
+        continue
+    text = path.read_text(encoding='utf-8')
+    text = text.replace('](../docs/', '](../')
+    text = text.replace('](docs/', '](')
+    path.write_text(text, encoding='utf-8')
+PY
+
+          (
+            cd wiki
+            tmp_sidebar="$(mktemp)"
+            {
+              echo "# Documentation"
+              echo
+            } > "$tmp_sidebar"
+
+            while IFS= read -r file; do
+              rel_path="${file#./}"
+              [ "$rel_path" = "Home.md" ] && continue
+
+              title="$(sed -n 's/^# \+//p' "$file" | head -n 1)"
+              if [ -z "$title" ]; then
+                base_name="${rel_path%.md}"
+                base_name="${base_name##*/}"
+                title="$(echo "$base_name" | sed -E 's/[-_]+/ /g')"
+                title="$(echo "$title" | awk '{for (i=1;i<=NF;i++) {$i=toupper(substr($i,1,1)) tolower(substr($i,2))}}1')"
+              fi
+
+              printf '* [%s](%s)\n' "$title" "$rel_path" >> "$tmp_sidebar"
+            done < <(find . -type f -name '*.md' ! -name '_Sidebar.md' ! -path './.git/*' | sort)
+
+            mv "$tmp_sidebar" _Sidebar.md
+          )
+
+      - name: Append changelog entry
+        run: |
+          set -euo pipefail
+          cd wiki
+
+          if [ ! -f Home.md ]; then
+            echo '# Home' > Home.md
+            echo >> Home.md
+          fi
+
+          if ! grep -q '^## Wiki Sync Log' Home.md; then
+            printf '\n## Wiki Sync Log\n' >> Home.md
+          fi
+
+          printf -- '- %s – Automated sync from docs directory.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" >> Home.md
+
+      - name: Commit and push changes
+        run: |
+          set -euo pipefail
+          cd wiki
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m 'chore: sync docs from main repository'
+            git push
+          else
+            echo 'No changes to commit.'
+          fi
