@@ -83,6 +83,16 @@ To deploy the agent to a cloud environment:
 
 The `PR-CYBR-FRONTEND-AGENT` integrates with other PR-CYBR agents to provide a seamless user experience. It communicates with the `PR-CYBR-BACKEND-AGENT` for data retrieval and submission, and interacts with the `PR-CYBR-USER-FEEDBACK-AGENT` to collect user feedback.
 
+## Audit Reporting & Governance
+
+Codex sync and security automation work must remain reviewable for every change cycle. During each audit run:
+
+- Update the human-readable findings in [`reports/audit-summary.md`](reports/audit-summary.md).
+- Record machine-readable workflow metadata in [`reports/workflows.json`](reports/workflows.json).
+- Reference both artifacts in the pull request description so governance reviewers can trace the codex sync and security automation changes that shipped with the release.
+
+These templates ship with the repository to ensure the reporting cadence stays consistent—replace the placeholders with real data as part of the audit process.
+
 ## Usage
 
 - **Development**
