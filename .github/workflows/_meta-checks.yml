@@ -1,0 +1,46 @@
+name: _meta-checks
+on:
+  workflow_call:
+
+jobs:
+  secrets-scan-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for latest secrets-scan on codex to succeed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, branch: 'codex', status: 'success', per_page: 20
+            });
+            const ok = runs.data.workflow_runs.some(r => r.name === 'secrets-scan');
+            core.setOutput('ok', ok ? 'yes' : 'no');
+        result-encoding: string
+
+  functionality-test-status:
+    runs-on: ubuntu-latest
+    needs: secrets-scan-status
+    steps:
+      - name: Wait for functionality-test to succeed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, branch: 'codex', status: 'success', per_page: 20
+            });
+            const ok = runs.data.workflow_runs.some(r => r.name === 'functionality-test');
+            core.setOutput('ok', ok ? 'yes' : 'no');
+
+  all-good:
+    runs-on: ubuntu-latest
+    needs: [secrets-scan-status, functionality-test-status]
+    outputs:
+      result: ${{ steps.decide.outputs.result }}
+    steps:
+      - id: decide
+        run: |
+          if [ "${{ needs.secrets-scan-status.outputs.ok }}" = "yes" ] && \
+             [ "${{ needs.functionality-test-status.outputs.ok }}" = "yes" ]; then
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "result=failure" >> $GITHUB_OUTPUT
