@@ -114,6 +114,10 @@ The `PR-CYBR-FRONTEND-AGENT` integrates with other PR-CYBR agents to provide a s
 
   - The build artifacts will be stored in the `build/` directory.
 
+## Documentation
+
+- [Agent Dashboard Operations Guide](docs/dashboard.md): Detailed setup steps, available actions, environment configuration, screenshot guidance, and troubleshooting tips for the dashboard experience.
+
 ## License
 
 This project is licensed under the **MIT License**. See the [`LICENSE`](LICENSE) file for details.
