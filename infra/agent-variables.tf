@@ -78,3 +78,52 @@ variable "AGENT_COLLAB" {
   sensitive   = true
   description = "Token for governance, discussions, issues, project boards"
 }
+
+# --- Terraform Cloud ---
+variable "TFC_TOKEN" {
+  type        = string
+  sensitive   = true
+  description = "API token for Terraform Cloud workspace automation"
+}
+
+# --- Notion Integrations ---
+variable "NOTION_TOKEN" {
+  type        = string
+  sensitive   = true
+  description = "Primary Notion integration token used by automation workflows"
+}
+
+variable "NOTION_PAGE_ID" {
+  type        = string
+  description = "Root Notion page ID that houses synced databases"
+}
+
+variable "NOTION_DISCUSSIONS_ARC_DB_ID" {
+  type        = string
+  description = "Database ID for the Discussions ARC backlog"
+}
+
+variable "NOTION_ISSUES_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the Issues backlog"
+}
+
+variable "NOTION_KNOWLEDGE_FILE_DB_ID" {
+  type        = string
+  description = "Database ID for the Knowledge File archive"
+}
+
+variable "NOTION_PR_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the Pull Request backlog"
+}
+
+variable "NOTION_PROJECT_BOARD_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the Project Board backlog"
+}
+
+variable "NOTION_TASK_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the Task backlog"
+}
