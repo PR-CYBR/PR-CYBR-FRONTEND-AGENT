@@ -1,0 +1,103 @@
+name: Terraform Cloud Speculative Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-*.yml'
+      - '.github/workflows/tfc-*.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+  TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+  TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+  CONFIG_DIRECTORY: infra
+
+jobs:
+  speculative:
+    name: Trigger speculative run in Terraform Cloud
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload configuration to Terraform Cloud
+        id: upload
+        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.3.2
+        with:
+          workspace: ${{ env.TF_WORKSPACE }}
+          directory: ${{ env.CONFIG_DIRECTORY }}
+          speculative: true
+
+      - name: Create speculative plan run
+        id: create-run
+        continue-on-error: true
+        uses: hashicorp/tfc-workflows-github/actions/create-run@v1.3.2
+        with:
+          workspace: ${{ env.TF_WORKSPACE }}
+          configuration_version: ${{ steps.upload.outputs.configuration_version_id }}
+          plan_only: true
+          message: "Speculative plan for PR #${{ github.event.pull_request.number }} from ${{ github.actor }}"
+
+      - name: Download plan output summary
+        if: ${{ steps.create-run.outputs.plan_id != '' }}
+        id: plan-output
+        uses: hashicorp/tfc-workflows-github/actions/plan-output@v1.3.2
+        with:
+          plan: ${{ steps.create-run.outputs.plan_id }}
+
+      - name: Comment with Terraform Cloud plan result
+        if: github.event_name == 'pull_request' && steps.create-run.outputs.run_link != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const runLink = `${{ toJSON(steps.create-run.outputs.run_link) }}`.replace(/"/g, '');
+            const adds = `${{ steps.plan-output.outputs.add }}`;
+            const changes = `${{ steps.plan-output.outputs.change }}`;
+            const destroys = `${{ steps.plan-output.outputs.destroy }}`;
+            const planSummary = adds ? `Plan: ${adds} to add, ${changes} to change, ${destroys} to destroy.` : 'Plan output unavailable. Check Terraform Cloud run for details.';
+            const body = `#### Terraform Cloud Speculative Plan\n${planSummary}\n[View full plan in Terraform Cloud](${runLink})`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(comment => comment.user.type === 'Bot' && comment.body.includes('Terraform Cloud Speculative Plan'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Ensure Terraform Cloud run completed
+        if: ${{ steps.create-run.outputs.run_status != '' && steps.create-run.outputs.run_status != 'planned_and_finished' }}
+        run: |
+          echo "Terraform Cloud run did not finish successfully."
+          echo "Status: ${{ steps.create-run.outputs.run_status }}"
+          echo "Details: ${{ steps.create-run.outputs.run_link }}"
+          exit 1
+
+      - name: Capture run URL for job summary
+        if: ${{ steps.create-run.outputs.run_link != '' }}
+        run: |
+          echo "Terraform Cloud Run: ${{ steps.create-run.outputs.run_link }}" >> "$GITHUB_STEP_SUMMARY"
