@@ -79,6 +79,17 @@ To deploy the agent to a cloud environment:
 
 - Ensure you have Docker and cloud CLI tools installed and configured on your machine.
 
+## Terraform Cloud Automation
+
+This repository uses the Terraform Cloud–GitHub workflow bridge so that secrets remain centralized in Terraform Cloud while GitHub
+Actions only uploads configuration and triggers runs.
+
+- Set the repository variables `TF_CLOUD_ORGANIZATION` and `TF_WORKSPACE` to match the Terraform Cloud workspace.
+- Store a Terraform Cloud API token with run permissions in the `TF_API_TOKEN` repository secret.
+- The workflows `.github/workflows/terraform-speculative.yml` and `.github/workflows/terraform-apply.yml` upload the `infra/`
+  configuration and initiate the appropriate run in Terraform Cloud.
+- All Terraform variables and credentials should continue to be managed as workspace variables inside Terraform Cloud.
+
 ## Integration
 
 The `PR-CYBR-FRONTEND-AGENT` integrates with other PR-CYBR agents to provide a seamless user experience. It communicates with the `PR-CYBR-BACKEND-AGENT` for data retrieval and submission, and interacts with the `PR-CYBR-USER-FEEDBACK-AGENT` to collect user feedback.

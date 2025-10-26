@@ -1,0 +1,76 @@
+name: Terraform Cloud Apply Run
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-*.yml'
+      - '.github/workflows/tfc-*.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-cloud-apply
+  cancel-in-progress: false
+
+env:
+  TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+  TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+  TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+  CONFIG_DIRECTORY: infra
+
+jobs:
+  apply:
+    name: Trigger apply run in Terraform Cloud
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload configuration to Terraform Cloud
+        id: upload
+        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.3.2
+        with:
+          workspace: ${{ env.TF_WORKSPACE }}
+          directory: ${{ env.CONFIG_DIRECTORY }}
+
+      - name: Create apply run
+        id: create-run
+        uses: hashicorp/tfc-workflows-github/actions/create-run@v1.3.2
+        with:
+          workspace: ${{ env.TF_WORKSPACE }}
+          configuration_version: ${{ steps.upload.outputs.configuration_version_id }}
+          message: "Apply run from GitHub Actions commit ${{ github.sha }}"
+
+      - name: Determine if the run requires confirmation
+        id: run-flags
+        if: ${{ steps.create-run.outputs.payload != '' }}
+        env:
+          PAYLOAD: ${{ steps.create-run.outputs.payload }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["PAYLOAD"])
+          confirmable = payload["data"]["attributes"]["actions"].get("IsConfirmable", False)
+          print(f"confirmable={str(confirmable).lower()}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"confirmable={str(confirmable).lower()}\n")
+          PY
+
+      - name: Apply Terraform Cloud run
+        if: ${{ steps.run-flags.outputs.confirmable == 'true' }}
+        id: apply-run
+        uses: hashicorp/tfc-workflows-github/actions/apply-run@v1.3.2
+        with:
+          run: ${{ steps.create-run.outputs.run_id }}
+          comment: "Auto-approved via GitHub Actions for commit ${{ github.sha }}"
+
+      - name: Capture run details
+        if: ${{ steps.create-run.outputs.run_link != '' }}
+        run: |
+          echo "Terraform Cloud Run: ${{ steps.create-run.outputs.run_link }}" >> "$GITHUB_STEP_SUMMARY"
