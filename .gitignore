@@ -36,3 +36,8 @@ var/
 
 # Secret files
 config/secrets.yml
+
+# Ignore local Terraform variable files
+infra/*.tfvars
+infra/terraform.tfstate*
+infra/.terraform/
