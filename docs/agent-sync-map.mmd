@@ -1,0 +1,54 @@
+%% Inter-agent synchronization graph
+%% Arrows point from a consumer to the agent it depends on for inputs or coordination signals.
+flowchart LR
+    subgraph Strategic_Cluster["Strategic Oversight"]
+        A01["A-01 Command Orchestrator"]
+        A10["A-10 Compliance & Policy"]
+    end
+
+    subgraph Data_Fabric["Data & Intelligence Fabric"]
+        A02["A-02 Intelligence Hub"]
+        A03["A-03 Threat Detection"]
+        A05["A-05 Data Pipeline"]
+        A08["A-08 Knowledge Graph"]
+        A09["A-09 Analytics Engine"]
+    end
+
+    subgraph Delivery_Cluster["Service Delivery"]
+        A04["A-04 Response Coordinator"]
+        A06["A-06 Frontend Experience"]
+        A07["A-07 API Gateway"]
+        A11["A-11 Communications Relay"]
+    end
+
+    subgraph Assurance_Cluster["Assurance & Monitoring"]
+        A12["A-12 Observability"]
+    end
+
+    %% Core orchestration
+    A01 --> A02
+    A01 --> A04
+    A04 --> A10
+    A07 --> A10
+
+    %% Data dependencies feeding the intelligence hub
+    A02 --> A05
+    A02 --> A08
+    A09 --> A02
+
+    %% Downstream use of intelligence
+    A03 --> A02
+    A04 --> A03
+
+    %% Service delivery flows
+    A04 --> A07
+    A06 --> A04
+    A06 --> A07
+    A11 --> A04
+    A11 --> A06
+
+    %% Monitoring loops
+    A12 --> A06
+    A12 --> A07
+    A12 --> A11
+    A12 --> A04
