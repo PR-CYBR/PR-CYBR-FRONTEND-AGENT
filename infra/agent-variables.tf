@@ -78,3 +78,45 @@ variable "AGENT_COLLAB" {
   sensitive   = true
   description = "Token for governance, discussions, issues, project boards"
 }
+
+# --- Notion Integration ---
+variable "NOTION_TOKEN" {
+  type        = string
+  sensitive   = true
+  description = "API token for PR-CYBR's Notion workspace"
+}
+
+variable "NOTION_PAGE_ID" {
+  type        = string
+  description = "Root Notion page ID used for documentation publishing"
+}
+
+variable "NOTION_DISCUSSIONS_ARC_DB_ID" {
+  type        = string
+  description = "Database ID for the discussions archive"
+}
+
+variable "NOTION_ISSUES_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the issues backlog"
+}
+
+variable "NOTION_KNOWLEDGE_FILE_DB_ID" {
+  type        = string
+  description = "Database ID for the knowledge file archive"
+}
+
+variable "NOTION_PR_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the pull request backlog"
+}
+
+variable "NOTION_PROJECT_BOARD_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the project board backlog"
+}
+
+variable "NOTION_TASK_BACKLOG_DB_ID" {
+  type        = string
+  description = "Database ID for the task backlog"
+}
